@@ -19,7 +19,7 @@ Works on Arch Linux, Debian, Ubuntu and macOS.
 ## Install
 
 ```
-git clone https://github.com/7yxz/baka-cli
+git clone https://github.com/yuuyake/baka-cli
 cd baka-cli
 bash install.sh
 ```
