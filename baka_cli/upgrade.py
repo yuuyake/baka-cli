@@ -10,7 +10,7 @@ import requests
 from . import __version__, config
 from .ui import console, error, warn
 
-REPO = "7yxz/baka-cli"
+REPO = "yuuyake/baka-cli"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main/baka_cli/__init__.py"
 ZIP = f"https://github.com/{REPO}/archive/refs/heads/main.zip"
 
