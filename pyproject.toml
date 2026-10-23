@@ -3,8 +3,8 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "techno-cli"
-version = "0.8.4"
+name = "baka-cli"
+version = "1.0.0"
 description = "ani-cli style multi-provider anime player for the terminal"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-techno-cli = "techno_cli.cli:main"
+baka-cli = "baka_cli.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["techno_cli*"]
+include = ["baka_cli*"]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs deps (python, pipx, mpv, fzf) and techno-cli. Supports Arch, Debian/Ubuntu, macOS.
+# Installs deps (python, pipx, mpv, fzf) and baka-cli. Supports Arch, Debian/Ubuntu, macOS.
 set -e
 cd "$(dirname "$0")"
 
@@ -18,4 +18,4 @@ fi
 
 pipx ensurepath
 pipx install --force .
-echo "Done. Restart your shell, then run: techno-cli -help"
+echo "Done. Restart your shell, then run: baka-cli -help"
