@@ -1,4 +1,3 @@
-"""AniList info (no login needed) used for Discord presence and the watch page."""
 import re
 
 import requests
@@ -30,6 +29,11 @@ def fetch(title):
             m = r.json()["data"]["Media"]
         except Exception:
             return None
+        
+        # This guard prevents the crash when AniList returns no results (Media is null)
+        if not m:
+            return None
+            
         t = m["title"]
         studios = (m.get("studios") or {}).get("nodes") or []
         info = {"id": m["id"], "url": m["siteUrl"], "title": t.get("english") or t.get("romaji"),
