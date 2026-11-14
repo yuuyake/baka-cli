@@ -27,10 +27,13 @@ def fetch(title):
     if info is None:
         try:
             r = requests.post(API, json={"query": Q, "variables": {"s": clean(title)}}, timeout=6)
-            m = r.json()["data"]["Media"]
+            m = (r.json().get("data") or {}).get("Media")
         except Exception:
             return None
-        t = m["title"]
+        if not m:
+            _mem[key] = None
+            return None
+        t = m.get("title") or {}
         studios = (m.get("studios") or {}).get("nodes") or []
         info = {"id": m["id"], "url": m["siteUrl"], "title": t.get("english") or t.get("romaji"),
                 "romaji": t.get("romaji"), "episodes": m.get("episodes"), "duration": m.get("duration"),
