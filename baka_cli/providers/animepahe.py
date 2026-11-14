@@ -3,7 +3,7 @@ import re
 import sys
 
 from ..mirrors import find_base
-from ..utils import session, unpack_packer
+from ..utils import make_session, unpack_packer
 
 MIRRORS = ["https://animepahe.pw", "https://animepahe.com", "https://animepahe.org",
            "https://animepahe.si", "https://animepahe.ru"]
@@ -15,6 +15,9 @@ class AnimePahe:
     name = "animepahe"
     in_all = True
     _base = None
+
+    def __init__(self):
+        self.session, _ = make_session()
 
     def _headers(self, base):
         cookie = DDG + (os.environ.get("PAHE_COOKIE") or "")
@@ -28,11 +31,11 @@ class AnimePahe:
 
         def probe(m):
             try:  # first hit sets the cookies in the session
-                session.get(m, headers=self._headers(m), timeout=15)
+                self.session.get(m, headers=self._headers(m), timeout=15)
             except Exception:
                 pass
-            r = session.get(f"{m}/api", params={"m": "search", "q": "a"},
-                            headers=self._headers(m), timeout=15)
+            r = self.session.get(f"{m}/api", params={"m": "search", "q": "a"},
+                                 headers=self._headers(m), timeout=15)
             return r.status_code == 200 and "data" in r.json()
 
         self._base = find_base("animepahe", MIRRORS, probe, "PAHE_URL")
@@ -41,7 +44,7 @@ class AnimePahe:
         return self._base
 
     def _get(self, url, **kw):
-        r = session.get(url, headers=self._headers(self.base), timeout=20, **kw)
+        r = self.session.get(url, headers=self._headers(self.base), timeout=20, **kw)
         r.raise_for_status()
         return r
 
@@ -69,7 +72,7 @@ class AnimePahe:
             sys.exit("no kwik sources found (blocked or layout changed)")
         want = "eng" if dub else "jpn"
         opts.sort(key=lambda o: (o[2] != want, abs(int(o[1]) - quality)))
-        page = session.get(opts[0][0], headers={"Referer": self.base + "/"}, timeout=20).text
+        page = self.session.get(opts[0][0], headers={"Referer": self.base + "/"}, timeout=20).text
         m = re.search(r"https?://[^'\"\s]+\.m3u8", unpack_packer(page))
         if not m:
             sys.exit("could not extract m3u8 from kwik")

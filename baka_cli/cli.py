@@ -1,4 +1,5 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 import difflib
 import os
@@ -90,23 +91,38 @@ def _sim(a, b):
 
 def search_providers(q, a):
     """Search the chosen provider; if it fails or finds nothing, quietly try the others."""
+    results, errs = [], []
     if a.all:
         names = [n for n, c in PROVIDERS.items() if c.in_all]
+        with console.status("Searching all providers..."):
+            def _search(name):
+                try:
+                    return name, PROVIDERS[name]().search(q), None
+                except (Exception, SystemExit) as e:
+                    return name, None, _msg(e)
+
+            with ThreadPoolExecutor(max_workers=len(names) or 1) as pool:
+                outcomes = list(pool.map(_search, names))
+        for n, found, err in outcomes:
+            if err is not None:
+                errs.append((n, err))
+            elif not found:
+                errs.append((n, "no results"))
+            else:
+                results += [(f"[{n}] {t}", (n, i, t)) for t, i in found]
     else:
         names = [a.provider] + [n for n in FALLBACKS if n != a.provider]
-    results, errs = [], []
-    for n in names:
-        try:
-            with console.status(f"Searching {n}..."):
-                found = PROVIDERS[n]().search(q)
-        except (Exception, SystemExit) as e:
-            errs.append((n, _msg(e)))
-            continue
-        if not found:
-            errs.append((n, "no results"))
-            continue
-        results += [(f"[{n}] {t}", (n, i, t)) for t, i in found]
-        if not a.all:
+        for n in names:
+            try:
+                with console.status(f"Searching {n}..."):
+                    found = PROVIDERS[n]().search(q)
+            except (Exception, SystemExit) as e:
+                errs.append((n, _msg(e)))
+                continue
+            if not found:
+                errs.append((n, "no results"))
+                continue
+            results += [(f"[{n}] {t}", (n, i, t)) for t, i in found]
             if errs:
                 console.print(f"[dim]{errs[0][0]} failed ({errs[0][1][:60]}), using {n}[/]")
             break
@@ -154,8 +170,11 @@ def get_stream(prov, prov_name, aid, epid, label, title, a, avoid=(), quiet=Fals
 
 
 def ep_num(label):
-    m = re.search(r"(\d+)(?:\.\d+)?$", label)
-    return int(m.group(1)) if m else None
+    m = re.search(r"(\d+(?:\.\d+)?)$", label)
+    if not m:
+        return None
+    s = m.group(1)
+    return float(s) if "." in s else int(s)
 
 
 def choose_episode(eps):
@@ -172,34 +191,41 @@ def _step(fn):
         return False, str(msg or type(e).__name__), time.time() - t0
 
 
+def _check_provider(item):
+    name, cls = item
+    cells, note, state = [], "", {}
+    p = cls()
+    ok, res, dt = _step(lambda: p.search("naruto"))
+    cells.append(f"[green]ok[/] {dt:.1f}s" if ok and res else "[red]fail[/]")
+    if not ok or not res:
+        note = res if not ok else "no results"
+    else:
+        state["aid"] = res[0][1]
+        ok, res, dt = _step(lambda: p.episodes(state["aid"]))
+        cells.append(f"[green]ok[/] {dt:.1f}s" if ok and res else "[red]fail[/]")
+        if not ok or not res:
+            note = res if not ok else "no episodes"
+        else:
+            state["ep"] = res[0][1]
+            ok, res, dt = _step(lambda: p.stream(state["aid"], state["ep"], 720, False))
+            cells.append(f"[green]ok[/] {dt:.1f}s" if ok else "[red]fail[/]")
+            if not ok:
+                note = res
+    while len(cells) < 3:
+        cells.append("[dim]-[/]")
+    return name, cells, note[:90]
+
+
 def doctor():
     """Runs search -> episodes -> stream against every provider."""
     t = Table(title="provider check", box=box.SIMPLE_HEAD, header_style="bold cyan")
     for c in ("provider", "search", "episodes", "stream", "notes"):
         t.add_column(c)
-    for name, cls in PROVIDERS.items():
-        cells, note, state = [], "", {}
-        with console.status(f"Testing {name}..."):
-            p = cls()
-            ok, res, dt = _step(lambda: p.search("naruto"))
-            cells.append(f"[green]ok[/] {dt:.1f}s" if ok and res else "[red]fail[/]")
-            if not ok or not res:
-                note = res if not ok else "no results"
-            else:
-                state["aid"] = res[0][1]
-                ok, res, dt = _step(lambda: p.episodes(state["aid"]))
-                cells.append(f"[green]ok[/] {dt:.1f}s" if ok and res else "[red]fail[/]")
-                if not ok or not res:
-                    note = res if not ok else "no episodes"
-                else:
-                    state["ep"] = res[0][1]
-                    ok, res, dt = _step(lambda: p.stream(state["aid"], state["ep"], 720, False))
-                    cells.append(f"[green]ok[/] {dt:.1f}s" if ok else "[red]fail[/]")
-                    if not ok:
-                        note = res
-        while len(cells) < 3:
-            cells.append("[dim]-[/]")
-        t.add_row(name, *cells, note[:90])
+    with console.status("Testing providers..."):
+        with ThreadPoolExecutor(max_workers=len(PROVIDERS) or 1) as pool:
+            rows = list(pool.map(_check_provider, PROVIDERS.items()))
+    for name, cells, note in rows:
+        t.add_row(name, *cells, note)
     console.print(t)
 
 
@@ -273,7 +299,15 @@ def _run():
                 idx = nxt
     if idx is None:
         if a.episode:
-            idx = next((i for i, (l, _) in enumerate(eps) if ep_num(l) == int(a.episode)), 0)
+            try:
+                target = float(a.episode) if "." in a.episode else int(a.episode)
+            except ValueError:
+                error(f"invalid episode number: {a.episode}")
+                sys.exit(1)
+            idx = next((i for i, (l, _) in enumerate(eps) if ep_num(l) == target), None)
+            if idx is None:
+                warn(f"episode {a.episode} not found, starting from {eps[0][0]}")
+                idx = 0
         else:
             idx = choose_episode(eps)
 

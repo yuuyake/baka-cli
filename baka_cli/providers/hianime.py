@@ -9,7 +9,7 @@ from urllib.parse import urljoin, urlparse
 
 from ..mirrors import find_base
 from ..ui import warn
-from ..utils import IMPERSONATE, session
+from ..utils import IMPERSONATE, make_session
 
 KEY = b"otaku-embed-v1"
 MIRRORS = ["https://hianime.at", "https://hianime.to", "https://hianime.sx", "https://hianimez.to"]
@@ -26,13 +26,16 @@ class HiAnime:
 
     _base = None
 
+    def __init__(self):
+        self.session, _ = make_session()
+
     @property
     def base(self):
         if self._base:
             return self._base
 
         def probe(m):
-            r = session.get(f"{m}/search", params={"keyword": "a"}, timeout=15)
+            r = self.session.get(f"{m}/search", params={"keyword": "a"}, timeout=15)
             return r.status_code == 200 and "Just a moment" not in r.text[:3000] and "film-name" in r.text
 
         self._base = find_base("hianime", MIRRORS, probe, "HIANIME_URL")
@@ -42,7 +45,7 @@ class HiAnime:
         return self._base
 
     def _get(self, url, **kw):
-        r = session.get(url, timeout=20, **kw)
+        r = self.session.get(url, timeout=20, **kw)
         if "Just a moment" in r.text[:3000]:
             hint = "" if IMPERSONATE else " (pip install curl_cffi to bypass)"
             sys.exit("hianime: blocked by cloudflare" + hint)

@@ -1,19 +1,26 @@
 import os
+import re
 import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 
-try:
-    # impersonates a real Chrome TLS/HTTP2 fingerprint, gets past most Cloudflare checks
-    from curl_cffi import requests as _cr
-    session = _cr.Session(impersonate="chrome")
-    IMPERSONATE = True
-except Exception:
-    import requests
-    session = requests.Session()
-    session.headers["User-Agent"] = (
-        "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-    IMPERSONATE = False
+
+def make_session():
+    try:
+        # impersonates a real Chrome TLS/HTTP2 fingerprint, gets past most Cloudflare checks
+        from curl_cffi import requests as _cr
+        return _cr.Session(impersonate="chrome"), True
+    except Exception:
+        import requests
+        s = requests.Session()
+        s.headers["User-Agent"] = (
+            "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        return s, False
+
+
+session, IMPERSONATE = make_session()
 
 
 def hint_install(tool):
@@ -80,10 +87,10 @@ def play(url, headers, title, sub=None):
     import shlex
     from . import settings
     cmd[1:1] = shlex.split(settings.get("mpv_args") or "")
-    if not os.path.basename(player).startswith("mpv"):
+    if not os.path.basename(player).startswith("mpv") or not hasattr(socket, "AF_UNIX"):
         subprocess.run(cmd)
         return -1.0
-    sock = f"/tmp/baka-cli-{os.getpid()}.sock"
+    sock = os.path.join(tempfile.gettempdir(), f"baka-cli-{os.getpid()}.sock")
     cmd.insert(1, f"--input-ipc-server={sock}")
     proc = subprocess.Popen(cmd)
     pct = [0.0]
