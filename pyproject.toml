@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "baka-cli"
 version = "1.0.0"
-description = "ani-cli style multi-provider anime player for the terminal"
+description = "a cli to watch anime"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
